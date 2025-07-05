@@ -5,6 +5,7 @@
 
 #define I2C_SDA 21
 #define I2C_SCL 22
+#define PH_PIN 34
 
 #define POWER 33
 #define SIGNAL 32
@@ -13,6 +14,8 @@ int value=0;
 
 int level=0;
 
+float ph_level=0;
+
 const char* ssid = "G Unit";
 const char* password = "hinokamikagurass";
 String serverURL = "https://www.google.com";
@@ -20,6 +23,7 @@ String serverURL = "https://www.google.com";
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 int WaterSensor();
 void connectToWiFi();
+float readPH();
 void scrollText(int row, String message, int delayTime, int lcdColumns);
 
 
@@ -57,10 +61,12 @@ void loop()
   lcd.print("Gang Gang/|?");
 
   level = WaterSensor();
+  ph_level = readPH();
 
-  String message = "Water Level: " + String(level);
+  String message = "PH Value: "+ String(ph_level) + " Water Level: " + String(level);
 
-  scrollText(1, message, 320, 16);
+  // scrollText(1, message, 320, 16);
+  delay(670);
 }
 
 int WaterSensor()
@@ -150,3 +156,18 @@ void connectToWiFi()
     Serial.println("\n❌ WiFi connection failed! Status: " + String(WiFi.status()));
   }
 }
+
+// Read PH val from sensor
+float readPH()
+{
+  int adcVal = analogRead(PH_PIN);
+
+  float volatge = adcVal * (3.3/4095.0);
+
+  Serial.printf("Voltage: %.2f\n", volatge);
+
+
+  float ph = 7 + ( (2.5 - volatge) / 0.18);
+  
+  return ph;
+};
