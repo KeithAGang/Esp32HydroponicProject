@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <Wire.h>  // Add this include
+#include <Wire.h>          
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
 
@@ -7,14 +7,14 @@
 #define I2C_SCL 22
 #define PH_PIN 34
 
-#define POWER 33
-#define SIGNAL 32
+#define WATER_LEVEL_POWER 33
+#define WATER_LEVEL_SIGNAL 32
 
-int value=0;
+#define RELAY_PIN 18 
 
-int level=0;
-
-float ph_level=0;
+int value = 0;
+int level = 0;
+float ph_level = 0;
 
 const char* ssid = "G Unit";
 const char* password = "hinokamikagurass";
@@ -31,66 +31,104 @@ void setup()
 {
   // Initialize Serial for debugging
   Serial.begin(115200);
-  
+
   // Configure I2C pins - THIS IS CRUCIAL
   Wire.begin(I2C_SDA, I2C_SCL);
 
-  // set for water level
-  pinMode(POWER, OUTPUT);
-  digitalWrite(POWER, LOW);
-  
+  // Configure water level sensor power pin
+  pinMode(WATER_LEVEL_POWER, OUTPUT);
+  digitalWrite(WATER_LEVEL_POWER, LOW); // Keep water level sensor power off initially
+
+  // --- **IMPORTANT EDIT HERE:** Configure RELAY_PIN as an OUTPUT ---
+  pinMode(RELAY_PIN, OUTPUT);
+  // --- **IMPORTANT EDIT HERE:** Set initial state of the relay (pump OFF) ---
+  // Assuming a common active-low relay module (LOW = ON, HIGH = OFF)
+  digitalWrite(RELAY_PIN, HIGH); // Set HIGH to keep the pump OFF when the ESP32 starts
+
   connectToWiFi();
+
   // Initialize LCD
   lcd.init();
   lcd.clear();
   lcd.backlight();
-  
+
   // Add a small delay to ensure LCD is ready
   delay(100);
-  
-  // Display text
-  
-  
-  
+
   Serial.println("LCD initialized");
+  Serial.println("Relay pin configured.");
 }
+
 
 void loop()
 {
   lcd.setCursor(2, 0);
   lcd.print("Gang Gang/|?");
 
-  level = WaterSensor();
-  ph_level = readPH();
+  level = WaterSensor(); // Read water level
+  ph_level = readPH(); // Read PH level (currently commented out)
 
+  Serial.print("Water Level Sensor Value: ");
+  Serial.println(level);
+  Serial.print("PH Value: ");
+  Serial.println(ph_level);
+
+
+  // --- **IMPORTANT EDIT HERE:** Logic to control the pump based on water level ---
+  // You'll need to adjust the threshold '500' based on your water level sensor's readings.
+  // Test your sensor and find the value that indicates "low water."
+  int lowWaterThreshold = 500; // Example threshold - ADJUST THIS VALUE!
+
+  if (level < lowWaterThreshold) { // If water level is below the threshold
+    digitalWrite(RELAY_PIN, LOW);   // Turn the pump ON (for active-low relays)
+    Serial.println("Pump Status: ON (Water level too low)");
+    lcd.clear();
+    lcd.setCursor(0, 0);            // Second line of LCD
+    lcd.print("Pump: Off        "); // Display status on LCD (padded with spaces to clear old text)
+  } else { // If water level is at or above the threshold
+    digitalWrite(RELAY_PIN, HIGH);  // Turn the pump OFF (for active-low relays)
+    Serial.println("Pump Status: OFF (Water level OK)");
+    lcd.setCursor(0, 0);            // Second line of LCD
+    lcd.print("Pump: On       "); // Display status on LCD
+  }
+
+  // lcd.printf("Water Level: %d", level);
+  
+  // --- END OF RELAY CONTROL LOGIC ---
+
+  lcd.setCursor(0, 1);
   String message = "PH Value: "+ String(ph_level) + " Water Level: " + String(level);
-
-  // scrollText(1, message, 320, 16);
-  delay(670);
+  // scrollText(1, message, 320, 16); // Currently commented out
+  lcd.print(message);
+  lcd.scrollDisplayLeft();
+  delay(670); // Small delay for loop iteration
 }
+
 
 int WaterSensor()
 {
-  digitalWrite(POWER, HIGH);
-  delay(10);
-  value = analogRead(SIGNAL);
-  delay(10);
-  digitalWrite(POWER, LOW);
+  digitalWrite(WATER_LEVEL_POWER, HIGH); // Power the water level sensor
+  delay(10);                             // Short delay for sensor to stabilize
+  value = analogRead(WATER_LEVEL_SIGNAL); // Read analog value from sensor
+  delay(10);                             // Short delay
+  digitalWrite(WATER_LEVEL_POWER, LOW);  // Turn off water level sensor power to save energy
   return value;
 }
 
+
 void scrollText(int row, String message, int delayTime, int lcdColumns)
 {
-  for (int i=0; i < lcdColumns; i++) {
-    message = " " + message; 
-  } 
-  message = message + " "; 
+  for (int i = 0; i < lcdColumns; i++) {
+    message = " " + message;
+  }
+  message = message + " ";
   for (int pos = 0; pos < message.length(); pos++) {
     lcd.setCursor(0, row);
     lcd.print(message.substring(pos, pos + lcdColumns));
     delay(delayTime);
   }
 }
+
 
 // Connects the ESP32 to the specified WiFi network.
 void connectToWiFi()
@@ -157,17 +195,17 @@ void connectToWiFi()
   }
 }
 
+
 // Read PH val from sensor
 float readPH()
 {
   int adcVal = analogRead(PH_PIN);
 
-  float volatge = adcVal * (3.3/4095.0);
+  float volatge = adcVal * (3.3 / 4095.0);
 
   Serial.printf("Voltage: %.2f\n", volatge);
 
+  float ph = 7 + ((2.5 - volatge) / 0.18);
 
-  float ph = 7 + ( (2.5 - volatge) / 0.18);
-  
   return ph;
 };
